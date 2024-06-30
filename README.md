@@ -5,146 +5,148 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Screen Configuration System</title>
     <style>
+        body 
+        {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f7f7f7;
+            padding: 20px;
+        }
+        .container 
+        {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .screen-selector 
+        {
+            margin-bottom: 20px;
+        }
         .seat 
         {
             width: 50px;
             height: 50px;
             margin: 5px;
-            background-color: green;
             display: inline-block;
+            background-color: #ccc;
             cursor: pointer;
         }
-        .locked 
+        .seat.available 
         {
-            background-color: yellow;
+            background-color: #28a745;
         }
-        .booked 
+        .seat.locked 
         {
-            background-color: red;
+            background-color: #ffc107;
+        }
+        .seat.booked 
+         {
+            background-color: #dc3545;
             cursor: not-allowed;
         }
-        .screen-selection 
+        .seat.selected 
         {
-            margin-bottom: 20px;
+            background-color: #007bff;
+        }
+        #message 
+        {
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <h1>Screen Configuration System</h1>
-    <div class="screen-selection">
-        <label for="screens">Select Screen: </label>
-        <select id="screens">
-            <option value="1">Screen 1</option>
-            <option value="2">Screen 2</option>
-            <option value="3">Screen 3</option>
-        </select>
+    <div class="container">
+        <div class="screen-selector">
+            <label for="screen">Select Screen:</label>
+            <select id="screen" onchange="selectScreen()">
+                <option value="screen1">Screen 1 (60 seats)</option>
+                <option value="screen2">Screen 2 (50 seats)</option>
+                <option value="screen3">Screen 3 (40 seats)</option>
+            </select>
+        </div>
+        <div id="seats"></div>
+        <div id="message"></div>
     </div>
-    <div id="seats"></div>
-    <button id="confirmBooking">Confirm Booking</button>
+
     <script>
-        const screens = {
-            1: { capacity: 60, seats: Array.from({ length: 60 }, (_, i) => ({ id: i + 1, status: 'available' })) },
-            2: { capacity: 50, seats: Array.from({ length: 50 }, (_, i) => ({ id: i + 1, status: 'available' })) },
-            3: { capacity: 40, seats: Array.from({ length: 40 }, (_, i) => ({ id: i + 1, status: 'available' })) }
+        const screens = 
+        {
+            screen1: 60,
+            screen2: 50,
+            screen3: 40
         };
+        let selectedScreen = 'screen1';
+        let seats = [];
 
-        const seatContainer = document.getElementById('seats');
-        const screenSelect = document.getElementById('screens');
-
-        function renderSeats(screenId) 
-       {
-            seatContainer.innerHTML = '';
-            const seats = screens[screenId].seats;
-            seats.forEach(seat => 
-           {
-                const seatElement = document.createElement('div');
-                seatElement.classList.add('seat');
-                seatElement.dataset.id = seat.id;
-                seatElement.dataset.screen = screenId;
-                seatContainer.appendChild(seatElement);
-
-                seatElement.addEventListener('click', () => 
-                    {
-                    if (seat.status === 'available') 
-                    {
-                        seat.status = 'locked';
-                        seatElement.classList.add('locked');
-                        lockSeat(screenId, seat.id);
-                    } else if (seat.status === 'locked') 
-                    {
-                        seat.status = 'available';
-                        seatElement.classList.remove('locked');
-                        releaseSeat(screenId, seat.id);
-                    }
-                });
-            });
-        }
-
-        function lockSeat(screenId, seatId) 
-        {
-            fetch(`/lock-seat/${screenId}/${seatId}`, { method: 'POST' })
-                .then(response => response.json())
-                .then(data => 
-                {
-                    if (!data.success) 
-                    {
-                        alert('Failed to lock seat.');
-                        document.querySelector(`.seat[data-id="${seatId}"]`).classList.remove('locked');
-                        screens[screenId].seats.find(seat => seat.id === seatId).status = 'available';
-                    }
-                });
-        }
-
-        function releaseSeat(screenId, seatId) 
-        {
-            fetch(`/release-seat/${screenId}/${seatId}`, { method: 'POST' });
-        }
-
-        document.getElementById('confirmBooking').addEventListener('click', () => 
+        function createSeats(screen) 
+      {
+            const seatsContainer = document.getElementById('seats');
+            seatsContainer.innerHTML = '';
+            seats = [];
+            for (let i = 0; i < screens[screen]; i++) 
             {
-            const screenId = screenSelect.value;
-            const lockedSeats = screens[screenId].seats.filter(seat => seat.status === 'locked');
-            if (lockedSeats.length === 0) 
-            {
-                alert('No seats selected.');
-                return;
+                const seat = document.createElement('div');
+                seat.className = 'seat available';
+                seat.dataset.index = i;
+                seat.addEventListener('click', () => selectSeat(i));
+                seatsContainer.appendChild(seat);
+                seats.push({
+                    element: seat,
+                    status: 'available',
+                    lockTimer: null
+                });
             }
+        }
 
-            const seatIds = lockedSeats.map(seat => seat.id);
-
-            fetch('/confirm-booking', 
-                {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ screenId, seatIds })
-            })
-                .then(response => response.json())
-                .then(data => 
-                 {
-                    if (data.success) 
-                    {
-                        alert('Booking confirmed.');
-                        lockedSeats.forEach(seat => 
-                        {
-                            seat.status = 'booked';
-                            document.querySelector(`.seat[data-id="${seat.id}"][data-screen="${screenId}"]`).classList.add('booked');
-                            document.querySelector(`.seat[data-id="${seat.id}"][data-screen="${screenId}"]`).classList.remove('locked');
-                        });
-                    } else 
-                    {
-                        alert('Failed to confirm booking.');
-                    }
-                });
-        });
-
-        screenSelect.addEventListener('change', () => 
+        function selectScreen() 
         {
-            renderSeats(screenSelect.value);
-        });
+            selectedScreen = document.getElementById('screen').value;
+            createSeats(selectedScreen);
+        }
 
-        renderSeats(screenSelect.value);
+        function selectSeat(index) 
+        {
+            const seat = seats[index];
+            if (seat.status === 'available') 
+            {
+                lockSeat(index);
+            } else if (seat.status === 'selected') 
+            {
+                releaseSeat(index);
+            }
+        }
+
+        function lockSeat(index) 
+        {
+            const seat = seats[index];
+            seat.status = 'locked';
+            seat.element.className = 'seat locked';
+            seat.lockTimer = setTimeout(() => releaseSeat(index), 30000); 
+            displayMessage(`Seat ${index + 1} locked. Complete booking within 15 seconds.`);
+        }
+
+        function releaseSeat(index) 
+        {
+            const seat = seats[index];
+            if (seat.status === 'locked') 
+            {
+                seat.status = 'available';
+                seat.element.className = 'seat available';
+                clearTimeout(seat.lockTimer);
+                seat.lockTimer = null;
+                displayMessage(`Seat ${index + 1} is available again.`);
+            }
+        }
+
+        function displayMessage(message) 
+        {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerText = message;
+        }
+
+        
+        createSeats(selectedScreen);
     </script>
 </body>
 </html>
